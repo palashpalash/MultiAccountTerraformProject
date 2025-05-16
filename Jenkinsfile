@@ -24,7 +24,9 @@ pipeline {
                     credentialsId: env.AWS_CREDENTIALS
                 ]]) {
                     dir('Terraform') {
-                        bat "terraform init -backend-config=env_vars\\\\${params.ENV}.backend"
+                        bat "terraform init -reconfigure -backend-config=env_vars\\\\${params.ENV}.backend"
+
+
                     }
                 }
             }
