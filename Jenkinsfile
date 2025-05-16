@@ -2,52 +2,36 @@ pipeline {
     agent any
 
     parameters {
-        choice(name: 'env', choices: ['dev', 'prod'], description: 'Choose the environment')
+        choice(name: 'ENV', choices: ['dev', 'prod'], description: 'Environment to deploy to')
     }
 
     environment {
-        TF_ENV = "${params.env}"
-        AWS_CREDENTIALS_ID = "${params.env == 'prod' ? 'aws-prod-creds' : 'aws-dev-creds'}"
-        TF_VAR_FILE = "terraform/env_vars/${params.env}.tfvars"
+        AWS_CREDENTIALS = credentials("aws-${params.ENV}-creds")
     }
 
     stages {
-        stage('Checkout') {
+        stage('Clone Repo') {
             steps {
-                checkout scm
+                git url: 'https://github.com/your-org/your-repo.git', branch: 'main'
             }
         }
 
         stage('Terraform Init') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                                  credentialsId: "${env.AWS_CREDENTIALS_ID}"]]) {
-                    dir('terraform') {
-                        sh """
-                            terraform init \
-                              -backend-config="bucket=\$(grep bucket ${env.TF_VAR_FILE} | awk '{print \$3}' | tr -d '\"')" \
-                              -backend-config="key=\$(grep key ${env.TF_VAR_FILE} | awk '{print \$3}' | tr -d '\"')" \
-                              -backend-config="region=\$(grep region ${env.TF_VAR_FILE} | awk '{print \$3}' | tr -d '\"')"
-                        """
-                    }
-                }
+                bat "terraform init -backend-config=env_vars/${params.ENV}.tfvars"
             }
         }
 
         stage('Terraform Plan') {
             steps {
-                dir('terraform') {
-                    sh "terraform plan -var-file=${env.TF_VAR_FILE}"
-                }
+                bat "terraform plan -var-file=env_vars/${params.ENV}.tfvars"
             }
         }
 
         stage('Terraform Apply') {
             steps {
-                input message: "Apply changes to ${params.env} environment?"
-                dir('terraform') {
-                    sh "terraform apply -auto-approve -var-file=${env.TF_VAR_FILE}"
-                }
+                input message: "Approve apply for ${params.ENV}?"
+                bat "terraform apply -auto-approve -var-file=env_vars/${params.ENV}.tfvars"
             }
         }
     }
