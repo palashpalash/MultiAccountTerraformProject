@@ -2,36 +2,49 @@ pipeline {
     agent any
 
     parameters {
-        choice(name: 'ENV', choices: ['dev', 'prod'], description: 'Environment to deploy to')
+        choice(name: 'ENV', choices: ['dev', 'prod'], description: 'Select the environment')
     }
 
     environment {
-        AWS_CREDENTIALS = credentials("aws-${params.ENV}-creds")
+        TF_VAR_env = "${params.ENV}"
     }
 
     stages {
-        stage('Clone Repo') {
+        stage('Checkout Code') {
             steps {
-                git url: 'https://github.com/your-org/your-repo.git', branch: 'main'
+                git 'https://github.com/your-username/your-terraform-repo.git'
+            }
+        }
+
+        stage('Set AWS Credentials') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: "aws-${params.ENV}-creds"
+                ]]) {
+                    echo "Using AWS credentials for ${params.ENV} environment"
+                }
             }
         }
 
         stage('Terraform Init') {
             steps {
-                bat "terraform init -backend-config=env_vars/${params.ENV}.tfvars"
+                bat """
+                    terraform init -backend-config=env_vars/${params.ENV}.backend
+                """
             }
         }
 
         stage('Terraform Plan') {
             steps {
-                bat "terraform plan -var-file=env_vars/${params.ENV}.tfvars"
+                bat "terraform plan"
             }
         }
 
         stage('Terraform Apply') {
             steps {
-                input message: "Approve apply for ${params.ENV}?"
-                bat "terraform apply -auto-approve -var-file=env_vars/${params.ENV}.tfvars"
+                input message: "Apply Terraform changes to ${params.ENV}?"
+                bat "terraform apply -auto-approve"
             }
         }
     }
