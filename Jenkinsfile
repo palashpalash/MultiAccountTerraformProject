@@ -5,6 +5,11 @@ pipeline {
         choice(name: 'ENV', choices: ['dev', 'prod'], description: 'Select environment')
     }
 
+    environment {
+        // Map ENV to corresponding Jenkins credential ID
+        AWS_CREDENTIALS = "${params.ENV == 'dev' ? 'aws-dev-creds' : 'aws-prod-creds'}"
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -14,16 +19,26 @@ pipeline {
 
         stage('Terraform Init') {
             steps {
-                dir('Terraform') {
-                    bat "terraform init -backend-config=env_vars\\${params.ENV}.backend"
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding', 
+                    credentialsId: env.AWS_CREDENTIALS
+                ]]) {
+                    dir('Terraform') {
+                        bat "terraform init -backend-config=env_vars\\\\${params.ENV}.backend"
+                    }
                 }
             }
         }
 
         stage('Terraform Plan') {
             steps {
-                dir('Terraform') {
-                    bat 'terraform plan'
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding', 
+                    credentialsId: env.AWS_CREDENTIALS
+                ]]) {
+                    dir('Terraform') {
+                        bat 'terraform plan'
+                    }
                 }
             }
         }
@@ -31,8 +46,13 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 input message: "Apply changes to ${params.ENV}?", ok: 'Apply'
-                dir('Terraform') {
-                    bat 'terraform apply -auto-approve'
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding', 
+                    credentialsId: env.AWS_CREDENTIALS
+                ]]) {
+                    dir('Terraform') {
+                        bat 'terraform apply -auto-approve'
+                    }
                 }
             }
         }
